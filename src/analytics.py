@@ -1,0 +1,169 @@
+import argparse
+import shutil
+import time
+from pathlib import Path
+
+from pyspark.sql import DataFrame, SparkSession
+from pyspark.sql.functions import col, lit
+from pyspark.sql.utils import AnalysisException
+
+
+DEFAULT_DATALAKE_ROOT = "/tmp/datalake"
+DEFAULT_OUTPUT_DIR = "outputs/analytics"
+
+
+def parse_args() -> argparse.Namespace:
+    parser = argparse.ArgumentParser(description="Run Spark SQL analytics on the local data lake.")
+    parser.add_argument("--datalake-root", default=DEFAULT_DATALAKE_ROOT)
+    parser.add_argument("--output-dir", default=DEFAULT_OUTPUT_DIR)
+    return parser.parse_args()
+
+
+def create_spark() -> SparkSession:
+    return (
+        SparkSession.builder.appName("AeroSense-IoT-Analytics")
+        .config("spark.sql.session.timeZone", "UTC")
+        .getOrCreate()
+    )
+
+
+def read_curated(spark: SparkSession, datalake_root: str) -> DataFrame:
+    curated_path = str(Path(datalake_root) / "curated")
+    try:
+        return spark.read.parquet(curated_path)
+    except AnalysisException as exc:
+        raise RuntimeError(f"No curated Parquet data found at {curated_path}. Run the streaming pipeline first.") from exc
+
+
+def write_csv(df: DataFrame, output_dir: Path, name: str) -> None:
+    target = output_dir / name
+    temp = output_dir / f".tmp_{name}"
+    if temp.exists():
+        shutil.rmtree(temp)
+    if target.exists():
+        shutil.rmtree(target)
+    df.coalesce(1).write.mode("overwrite").option("header", "true").csv(str(temp))
+    temp.rename(target)
+
+
+def print_section(title: str, df: DataFrame) -> None:
+    print(f"\n=== {title} ===")
+    df.show(truncate=False)
+
+
+def run_partition_pruning_demo(curated: DataFrame) -> DataFrame:
+    sample_partition = (
+        curated.select("sensor_type", "year", "month")
+        .where(col("sensor_type").isNotNull() & col("year").isNotNull() & col("month").isNotNull())
+        .limit(1)
+        .collect()
+    )
+    if not sample_partition:
+        spark = curated.sparkSession
+        return spark.createDataFrame(
+            [("no-data", 0.0, 0.0, 0.0, 0, 0)],
+            "filter_description string, unfiltered_seconds double, filtered_seconds double, speedup_factor double, unfiltered_count long, filtered_count long",
+        )
+
+    sample = sample_partition[0]
+
+    start = time.perf_counter()
+    unfiltered_count = curated.count()
+    unfiltered_seconds = time.perf_counter() - start
+
+    filtered = curated.where(
+        (col("sensor_type") == sample["sensor_type"])
+        & (col("year") == sample["year"])
+        & (col("month") == sample["month"])
+    )
+    start = time.perf_counter()
+    filtered_count = filtered.count()
+    filtered_seconds = time.perf_counter() - start
+
+    speedup = unfiltered_seconds / filtered_seconds if filtered_seconds > 0 else 0.0
+    spark = curated.sparkSession
+    return spark.createDataFrame(
+        [
+            (
+                f"sensor_type={sample['sensor_type']}, year={sample['year']}, month={sample['month']}",
+                float(unfiltered_seconds),
+                float(filtered_seconds),
+                float(speedup),
+                int(unfiltered_count),
+                int(filtered_count),
+            )
+        ],
+        "filter_description string, unfiltered_seconds double, filtered_seconds double, speedup_factor double, unfiltered_count long, filtered_count long",
+    )
+
+
+def main() -> int:
+    args = parse_args()
+    output_dir = Path(args.output_dir)
+    output_dir.mkdir(parents=True, exist_ok=True)
+
+    spark = create_spark()
+    spark.sparkContext.setLogLevel("WARN")
+    curated = read_curated(spark, args.datalake_root).cache()
+    curated.createOrReplaceTempView("curated_readings")
+
+    top_anomaly_hours = spark.sql(
+        """
+        SELECT
+            date_format(event_time, 'yyyy-MM-dd HH:00:00') AS hour_utc,
+            SUM(CASE WHEN is_anomaly THEN 1 ELSE 0 END) AS anomaly_count,
+            COUNT(*) AS observation_count
+        FROM curated_readings
+        GROUP BY date_format(event_time, 'yyyy-MM-dd HH:00:00')
+        ORDER BY anomaly_count DESC, observation_count DESC
+        LIMIT 5
+        """
+    )
+
+    sensor_statistics = spark.sql(
+        """
+        SELECT
+            sensor_type,
+            AVG(value) AS global_mean,
+            MIN(value) AS min_value,
+            MAX(value) AS max_value,
+            STDDEV(value) AS stddev_value,
+            100.0 * SUM(CASE WHEN is_anomaly THEN 1 ELSE 0 END) / COUNT(*) AS anomaly_rate_percent,
+            COUNT(*) AS observation_count
+        FROM curated_readings
+        GROUP BY sensor_type
+        ORDER BY sensor_type
+        """
+    )
+
+    temperature_daily = spark.sql(
+        """
+        SELECT
+            to_date(event_time) AS day_utc,
+            AVG(value) AS mean_temperature,
+            SUM(CASE WHEN is_anomaly THEN 1 ELSE 0 END) AS anomaly_count,
+            COUNT(*) AS observation_count
+        FROM curated_readings
+        WHERE sensor_type = 'temperature'
+        GROUP BY to_date(event_time)
+        ORDER BY day_utc
+        """
+    )
+
+    pruning_demo = run_partition_pruning_demo(curated)
+
+    for title, df, name in [
+        ("Top 5 anomaly hours", top_anomaly_hours, "top_anomaly_hours"),
+        ("Sensor statistics", sensor_statistics, "sensor_statistics"),
+        ("Temperature daily evolution", temperature_daily, "temperature_daily_evolution"),
+        ("Partition pruning demo", pruning_demo, "partition_pruning_demo"),
+    ]:
+        print_section(title, df)
+        write_csv(df, output_dir, name)
+
+    spark.stop()
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

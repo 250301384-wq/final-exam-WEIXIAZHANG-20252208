@@ -1,0 +1,16 @@
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+.idea/
+.vscode/
+tmp/
+logs/
+*.log
+LASTNAME_FIRSTNAME_exam.zip
+ZHANG_WEIXIA_exam.zip
+outputs/screenshots/*.png
+outputs/screenshots/*.jpg
+outputs/screenshots/*.jpeg
+outputs/screenshots/*.webp
+
