@@ -1,0 +1,38 @@
+>>> curl.exe -s http://127.0.0.1:5000/api/v1/health
+{"data":{"service":"aerosense-api","status":"ok"},"error":null,"status":"success"}
+
+>>> curl.exe -s http://127.0.0.1:5000/api/v1/sensors
+{"data":{"sensors":["temperature","humidity","pressure"]},"error":null,"status":"success"}
+
+>>> curl.exe -s http://127.0.0.1:5000/api/v1/sensors/temperature/latest
+{"data":{"event":{"anomaly":false,"sensor":"temperature","source":"site-A-rack-12","timestamp":1779158495737,"unit":"C","value":15.91},"kafka":{"key":"temperature","offset":3353,"partition":2,"topic":"sensor-events"}},"error":null,"status":"success"}
+
+>>> curl.exe -s "http://127.0.0.1:5000/api/v1/sensors/temperature/stats?days=7"
+{"data":{"days":7,"sensor":"temperature","statistics":[{"anomaly_count":171,"day":"2026-05-19","max_value":44.75,"mean_value":26.300488095238094,"min_value":15.09,"observation_count":1680}]},"error":null,"status":"success"}
+
+>>> curl.exe -s "http://127.0.0.1:5000/api/v1/anomalies?sensor=temperature&limit=10"
+{"data":{"count":10,"items":[{"day":19,"event_time":"2026-05-19T10:41:34+00:00","is_anomaly":true,"month":5,"producer_anomaly":true,"sensor_source":"site-A-rack-12","sensor_type":"temperature","unit":"C","value":39.49,"year":2026},{"day":19,"event_time":"2026-05-19T10:33:03+00:00","is_anomaly":true,"month":5,"producer_anomaly":true,"sensor_source":"site-A-rack-12","sensor_type":"temperature","unit":"C","value":43.81,"year":2026},{"day":19,"event_time":"2026-05-19T10:32:36+00:00","is_anomaly":true,"month":5,"producer_anomaly":true,"sensor_source":"site-A-rack-12","sensor_type":"temperature","unit":"C","value":40.53,"year":2026},{"day":19,"event_time":"2026-05-19T10:32:09+00:00","is_anomaly":true,"month":5,"producer_anomaly":true,"sensor_source":"site-A-rack-12","sensor_type":"temperature","unit":"C","value":39.18,"year":2026},{"day":19,"event_time":"2026-05-19T10:31:42+00:00","is_anomaly":true,"month":5,"producer_anomaly":true,"sensor_source":"site-A-rack-12","sensor_type":"temperature","unit":"C","value":44.59,"year":2026},{"day":19,"event_time":"2026-05-19T10:31:15+00:00","is_anomaly":true,"month":5,"producer_anomaly":true,"sensor_source":"site-A-rack-12","sensor_type":"temperature","unit":"C","value":36.04,"year":2026},{"day":19,"event_time":"2026-05-19T10:30:48+00:00","is_anomaly":true,"month":5,"producer_anomaly":true,"sensor_source":"site-A-rack-12","sensor_type":"temperature","unit":"C","value":37.59,"year":2026},{"day":19,"event_time":"2026-05-19T10:30:41+00:00","is_anomaly":true,"month":5,"producer_anomaly":true,"sensor_source":"site-A-rack-12","sensor_type":"temperature","unit":"C","value":43.81,"year":2026},{"day":19,"event_time":"2026-05-19T10:30:21+00:00","is_anomaly":true,"month":5,"producer_anomaly":true,"sensor_source":"site-A-rack-12","sensor_type":"temperature","unit":"C","value":44.24,"year":2026},{"day":19,"event_time":"2026-05-19T10:30:14+00:00","is_anomaly":true,"month":5,"producer_anomaly":true,"sensor_source":"site-A-rack-12","sensor_type":"temperature","unit":"C","value":40.53,"year":2026}],"limit":10},"error":null,"status":"success"}
+
+>>> curl.exe -s -X POST http://127.0.0.1:5000/api/v1/readings -H "Content-Type: application/json" -d "{\"sensor\":\"temperature\",\"value\":36.8,\"unit\":\"C\",\"source\":\"site-A-rack-12\"}"
+{"data":null,"error":{"code":"bad_request","message":"Malformed JSON body."},"status":"error"}
+
+>>> curl.exe -s -i http://127.0.0.1:5000/api/v1/sensors/noise/latest
+HTTP/1.1 404 NOT FOUND
+Server: Werkzeug/3.1.8 Python/3.11.9
+Date: Tue, 19 May 2026 02:50:48 GMT
+Content-Type: application/json
+Content-Length: 105
+Connection: close
+
+{"data":null,"error":{"code":"not_found","message":"Unsupported sensor type 'noise'."},"status":"error"}
+
+>>> curl.exe -s -i "http://127.0.0.1:5000/api/v1/sensors/temperature/stats?days=0"
+HTTP/1.1 400 BAD REQUEST
+Server: Werkzeug/3.1.8 Python/3.11.9
+Date: Tue, 19 May 2026 02:50:49 GMT
+Content-Type: application/json
+Content-Length: 123
+Connection: close
+
+{"data":null,"error":{"code":"bad_request","message":"Query parameter 'days' must be between 1 and 90."},"status":"error"}
+

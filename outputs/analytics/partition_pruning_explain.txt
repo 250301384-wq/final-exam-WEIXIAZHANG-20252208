@@ -1,0 +1,17 @@
+== Parsed Logical Plan ==
+'Filter ((('sensor_type = pressure) AND ('year = 2026)) AND ('month = 5))
++- Relation [value#0,unit#1,event_timestamp_ms#2L,sensor_source#3,producer_anomaly#4,raw_json#5,message_key#6,topic#7,partition#8,offset#9L,ingestion_time#10,event_time#11,is_anomaly#12,domain#13,sensor_type#14,year#15,month#16,day#17] parquet
+
+== Analyzed Logical Plan ==
+value: double, unit: string, event_timestamp_ms: bigint, sensor_source: string, producer_anomaly: boolean, raw_json: string, message_key: string, topic: string, partition: int, offset: bigint, ingestion_time: timestamp, event_time: timestamp, is_anomaly: boolean, domain: string, sensor_type: string, year: int, month: int, day: int
+Filter (((sensor_type#14 = pressure) AND (year#15 = 2026)) AND (month#16 = 5))
++- Relation [value#0,unit#1,event_timestamp_ms#2L,sensor_source#3,producer_anomaly#4,raw_json#5,message_key#6,topic#7,partition#8,offset#9L,ingestion_time#10,event_time#11,is_anomaly#12,domain#13,sensor_type#14,year#15,month#16,day#17] parquet
+
+== Optimized Logical Plan ==
+Filter (((isnotnull(sensor_type#14) AND isnotnull(year#15)) AND isnotnull(month#16)) AND (((sensor_type#14 = pressure) AND (year#15 = 2026)) AND (month#16 = 5)))
++- Relation [value#0,unit#1,event_timestamp_ms#2L,sensor_source#3,producer_anomaly#4,raw_json#5,message_key#6,topic#7,partition#8,offset#9L,ingestion_time#10,event_time#11,is_anomaly#12,domain#13,sensor_type#14,year#15,month#16,day#17] parquet
+
+== Physical Plan ==
+*(1) ColumnarToRow
++- FileScan parquet [value#0,unit#1,event_timestamp_ms#2L,sensor_source#3,producer_anomaly#4,raw_json#5,message_key#6,topic#7,partition#8,offset#9L,ingestion_time#10,event_time#11,is_anomaly#12,domain#13,sensor_type#14,year#15,month#16,day#17] Batched: true, DataFilters: [], Format: Parquet, Location: MetadataLogFileIndex(1 paths)[/tmp/datalake/curated], PartitionFilters: [isnotnull(sensor_type#14), isnotnull(year#15), isnotnull(month#16), (sensor_type#14 = pressure),..., PushedFilters: [], ReadSchema: struct<value:double,unit:string,event_timestamp_ms:bigint,sensor_source:string,producer_anomaly:b...
+

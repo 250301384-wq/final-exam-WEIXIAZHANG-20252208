@@ -1,0 +1,15 @@
+Spark pipeline evidence summary
+
+Command 1:
+spark-submit --packages org.apache.spark:spark-sql-kafka-0-10_2.12:3.5.3 src/spark_pipeline.py --duration-seconds 90 --trigger "10 seconds"
+Exit code: 0
+
+Command 2, used to advance watermark and close 5-minute append-mode windows:
+python src/producer.py --count 30 --rate 200 --source site-A-rack-12 --seed 20252209
+spark-submit --packages org.apache.spark:spark-sql-kafka-0-10_2.12:3.5.3 src/spark_pipeline.py --duration-seconds 60 --trigger "10 seconds"
+Exit code: 0
+
+Parquet file counts after the run:
+raw=6
+curated=6
+consumption=1
