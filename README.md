@@ -47,6 +47,16 @@ The implementation is intentionally local, simple, and defensible. It uses a 3-b
 
 More details are in `docs/architecture.md`.
 
+## Visual Evidence
+
+![Architecture overview](docs/images/01_architecture_overview.png)
+![Producer delivery summary](docs/images/02_producer_delivery_summary.png)
+![Spark streaming and data lake evidence](docs/images/03_spark_streaming_datalake_evidence.png)
+![Analytics and partition pruning evidence](docs/images/04_analytics_partition_pruning.png)
+![REST API validation evidence](docs/images/05_rest_api_validation.png)
+
+The full image package and usage notes are in `docs/images/README_images_manifest.md`.
+
 ## Prerequisites
 
 Minimum versions expected by the exam:
