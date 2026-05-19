@@ -133,7 +133,7 @@ Run curl tests:
 bash tests/test_curl_commands.sh
 ```
 
-Clean up local runtime state:
+Clean up local runtime state only when you intend to regenerate evidence from scratch:
 
 ```bash
 docker compose down -v
@@ -200,20 +200,22 @@ The platform targets at-least-once delivery. The producer uses `acks=all`, retri
 
 ## Results and Evidence
 
-No generated analytics CSV, log, screenshot, or benchmark number is committed as evidence. Run:
+This submission includes real generated outputs:
+
+- `outputs/analytics/summary.md` for numeric query results and partition-pruning timing.
+- `outputs/analytics/partition_pruning_explain.txt` for the physical plan with partition filters.
+- `outputs/evidence/*.txt` for Kafka, producer, Spark, analytics, and curl/API command outputs.
+- `outputs/screenshots/kafka_ui_dashboard.png` and `docs/images/` for evaluator-friendly visual evidence.
+
+The current analytics summary reports partition pruning for `sensor_type=pressure, year=2026, month=5` with a 4.05x measured speedup on this local run, reducing the scanned result from 5030 rows to 1675 filtered rows.
+
+To reproduce the evidence from scratch, run:
 
 ```bash
 bash scripts/run_full_demo.sh
 ```
 
-Then inspect:
-
-- `outputs/analytics/summary.md` for real numeric excerpts.
-- `outputs/analytics/partition_pruning_explain.txt` for the physical plan with partition filters.
-- `outputs/evidence/*.txt` for Kafka, producer, Spark, analytics, and curl command outputs.
-- `outputs/screenshots/` for manual screenshots, if requested by the evaluator.
-
-Recommended manual screenshots:
+Useful manual screenshots:
 
 - Kafka UI topic page for `sensor-events`.
 - Kafka UI consumer group or topic metrics page after Spark has consumed data.

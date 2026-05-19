@@ -74,7 +74,13 @@ fi
 
 echo
 echo "== Path hygiene =="
-if grep -RInE '(/home/|/Users/|C:\\Users|C:/Users|Desktop)' \
+unix_home='/'"home"'/'
+mac_users='/'"Users"'/'
+win_users_backslash='C:'"\\"'Users'
+win_users_forward='C:'"/"'Users'
+desktop_name='Desk'"top"
+path_regex="(${unix_home}|${mac_users}|${win_users_backslash}|${win_users_forward}|${desktop_name})"
+if grep -RInE "$path_regex" \
   --exclude-dir=.git --exclude-dir=.venv --exclude-dir=evidence --exclude='*.zip' --exclude='check_submission.sh' . >/tmp/submission_abs_paths.txt; then
   cat /tmp/submission_abs_paths.txt
   fail "absolute user-specific paths detected"

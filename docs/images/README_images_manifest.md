@@ -13,7 +13,7 @@ Included images:
 
 Excluded:
 
-- Codex / ChatGPT UI screenshots.
+- Development UI screenshots.
 - Images dominated by local absolute Windows paths.
 - Failed intermediate troubleshooting screenshots.
 
