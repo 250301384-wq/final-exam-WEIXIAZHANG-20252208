@@ -47,7 +47,7 @@ def create_app() -> Flask:
 
     @app.get("/api/v1/sensors/<sensor_type>/latest")
     def latest(sensor_type: str):
-        validation = validate_sensor(sensor_type)
+        validation = validate_sensor(sensor_type, status=404)
         if validation:
             return validation
         reading = latest_reading(
@@ -61,7 +61,7 @@ def create_app() -> Flask:
 
     @app.get("/api/v1/sensors/<sensor_type>/stats")
     def stats(sensor_type: str):
-        validation = validate_sensor(sensor_type)
+        validation = validate_sensor(sensor_type, status=404)
         if validation:
             return validation
         days_value = request.args.get("days", "7")
@@ -79,7 +79,7 @@ def create_app() -> Flask:
     def anomalies():
         sensor_type = request.args.get("sensor")
         if sensor_type:
-            validation = validate_sensor(sensor_type)
+            validation = validate_sensor(sensor_type, status=400)
             if validation:
                 return validation
         limit = parse_int(request.args.get("limit", "50"), "limit", 1, 1000)
@@ -87,7 +87,14 @@ def create_app() -> Flask:
             return limit
         rows = recent_anomalies(sensor_type, limit, app.config["DATALAKE_ROOT"])
         if rows is None:
-            return error_response(404, "not_found", "Curated data lake zone is not available.")
+            return success_response(
+                {
+                    "items": [],
+                    "count": 0,
+                    "limit": limit,
+                    "warning": "Curated data lake zone is not available.",
+                }
+            )
         return success_response({"items": rows, "count": len(rows), "limit": limit})
 
     @app.post("/api/v1/readings")
@@ -118,9 +125,10 @@ def error_response(status: int, code: str, message: str):
     return jsonify({"status": "error", "data": None, "error": {"code": code, "message": message}}), status
 
 
-def validate_sensor(sensor_type: str):
+def validate_sensor(sensor_type: str, status: int):
     if sensor_type not in SENSORS:
-        return error_response(422, "invalid_sensor", f"Unsupported sensor type '{sensor_type}'.")
+        code = "not_found" if status == 404 else "bad_request"
+        return error_response(status, code, f"Unsupported sensor type '{sensor_type}'.")
     return None
 
 

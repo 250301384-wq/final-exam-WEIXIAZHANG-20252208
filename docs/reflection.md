@@ -2,21 +2,21 @@
 
 ## 1. Crash after raw write but before curated write
 
-If the pipeline writes a micro-batch to the raw zone and crashes before the curated sink commits, the lake temporarily contains the Kafka payload but not the cleaned analytical record. This is acceptable for recovery because the Kafka source offset for the curated query is stored in its own checkpoint directory. On restart, the curated query resumes from its last committed offset and processes the missing batch. The important design point is to use a separate checkpoint per sink; sharing one checkpoint across raw, curated, and consumption would mix progress metadata and could make recovery inconsistent.
+The raw zone may contain a Kafka payload that is not yet present in curated data. Separate checkpoints prevent this from becoming permanent: the curated query resumes from its own last committed Kafka offset and reprocesses the missing batch. A single shared checkpoint across multiple sinks would be unsafe because it would mix progress from sinks that commit at different moments.
 
-## 2. Scaling the producer to 50,000 messages per second
+## 2. Producer scaled to 50,000 messages per second
 
-The first bottlenecks would probably be producer batching, broker disk throughput, partition count, and Spark micro-batch processing time. Three partitions are enough for the exam, but not necessarily for 50,000 messages per second. I would increase partitions, tune producer compression and batch size, verify broker disk and network metrics, and scale Spark executors. I would also monitor consumer lag to know whether Kafka ingestion or Spark processing is the limiting stage.
+The first bottlenecks would likely be partition count, broker disk throughput, network bandwidth, and Spark micro-batch latency. I would increase Kafka partitions, tune producer compression and batching, monitor broker I/O, and scale Spark executors. Consumer lag is the main signal for deciding whether Kafka ingestion or Spark processing is behind.
 
 ## 3. Kafka as source of truth vs Parquet data lake
 
-Kafka is strong as a short- to medium-term source of truth for replayable event streams, especially when consumers need ordering, low latency, and independent offsets. It is weaker for long historical retention because storage is expensive and analytical scans are awkward. A Parquet data lake is better for long-term history, partition pruning, batch analytics, and cheap columnar storage. I would use Kafka as the operational event log and Parquet as the historical analytical source.
+Kafka is a strong operational source of truth for recent ordered events, replay, and independent consumer offsets. It is expensive and inconvenient for long analytical history. A Parquet data lake is better for historical retention, column pruning, partition pruning, and batch SQL. In this design Kafka is the operational log, while Parquet is the analytical source.
 
 ## 4. Broken sensor emitting aberrant values for two hours
 
-The pipeline detects bad values in two ways. Physically impossible values are filtered out during validation, while plausible but abnormal values are kept and marked with `is_anomaly`. If a sensor emits abnormal values for two hours, analytics will show a sustained anomaly rate spike by sensor type and time. To isolate without deleting, I would write suspicious records to a quarantine zone or add a `quality_status` column such as `valid`, `anomalous`, or `quarantined`.
+Physically impossible values are filtered during validation. Plausible but abnormal values are preserved with `is_anomaly=true`, so analytics can reveal a sustained anomaly spike by time and sensor type. In production I would add a quarantine or `quality_status` column to isolate suspicious data without deleting it.
 
 ## 5. Adding a new `co2` sensor type
 
-The required changes are precise. In `src/producer.py`, add `co2` to `SENSOR_CONFIG` with unit and ranges. In `src/spark_pipeline.py`, extend the validation predicate and anomaly rule. In `api/app.py`, add `co2` to `SENSORS` and define semantic validation. In documentation, update the schema description, API examples, and technical notes. No Kafka topic change is required because the key-based partitioning already works for new sensor values, although a higher event volume may justify more partitions.
+Update `src/producer.py` with unit and normal/anomalous ranges, update `src/spark_pipeline.py` validation and anomaly rules, and update `api/app.py` sensor validation. Documentation and curl examples should also mention `co2`. The Kafka topic can remain the same because key-based partitioning already works for new sensor values.
 

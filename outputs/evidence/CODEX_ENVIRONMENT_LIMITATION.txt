@@ -1,0 +1,17 @@
+Codex validation limitation
+
+Kafka, the topic fault-tolerance test, and the producer were run successfully in this
+environment. Real outputs are saved in outputs/evidence/01_* through 09_*.
+
+The full Spark/data-lake/analytics/API demo could not be completed here because:
+
+1. WSL has no Java runtime, so WSL spark-submit fails with "JAVA_HOME is not set".
+2. Windows Spark can start only after overriding a stale HADOOP_HOME, but then fails
+   with a Hadoop NativeIO / winutils compatibility error while initializing streaming
+   checkpoint file managers.
+
+No Spark Parquet outputs, analytics CSV files, benchmark numbers, or screenshots were
+fabricated. To complete evidence generation, run scripts/run_full_demo.sh in an
+environment with Java available to Spark, or fix the local Windows Hadoop/winutils setup
+and rerun the Spark and analytics commands from README.md.
+

@@ -1,6 +1,8 @@
-# Fault Tolerance Evidence
+# Kafka Fault Tolerance
 
-## Topic Configuration
+The following output was generated locally by `scripts/run_full_demo.sh` on 2026-05-19 and is also saved under `outputs/evidence/`.
+
+## Before Broker Failure
 
 Command:
 
@@ -10,57 +12,60 @@ docker exec kafka1 kafka-topics \
   --describe --topic sensor-events
 ```
 
-Expected configuration:
+Output:
 
 ```text
-Topic: sensor-events  TopicId: ...  PartitionCount: 3  ReplicationFactor: 3
-Configs: min.insync.replicas=2
-
-Topic: sensor-events  Partition: 0  Leader: 1  Replicas: 1,2,3  Isr: 1,2,3
-Topic: sensor-events  Partition: 1  Leader: 2  Replicas: 2,3,1  Isr: 2,3,1
-Topic: sensor-events  Partition: 2  Leader: 3  Replicas: 3,1,2  Isr: 3,1,2
+Topic: sensor-events	TopicId: R9-5BNrLTcOv5REGpwRatg	PartitionCount: 3	ReplicationFactor: 3	Configs: min.insync.replicas=2
+	Topic: sensor-events	Partition: 0	Leader: 2	Replicas: 2,3,1	Isr: 2,3,1
+	Topic: sensor-events	Partition: 1	Leader: 3	Replicas: 3,1,2	Isr: 3,1,2
+	Topic: sensor-events	Partition: 2	Leader: 1	Replicas: 1,2,3	Isr: 1,2,3
 ```
 
-The exact leader ids can differ after restarts, but every partition must show three replicas and at least two in-sync replicas while the cluster is healthy.
+All partitions have three replicas and three in-sync replicas.
 
-## Broker Failure Test
+## After Stopping `kafka2`
 
 Commands:
 
 ```bash
-docker exec kafka1 kafka-topics --bootstrap-server kafka1:29092 --describe --topic sensor-events
 docker stop kafka2
-sleep 15
-docker exec kafka1 kafka-topics --bootstrap-server kafka1:29092 --describe --topic sensor-events
-docker start kafka2
 sleep 20
-docker exec kafka1 kafka-topics --bootstrap-server kafka1:29092 --describe --topic sensor-events
+docker exec kafka1 kafka-topics \
+  --bootstrap-server kafka1:29092 \
+  --describe --topic sensor-events
 ```
 
-Representative trace immediately after stopping `kafka2`:
+Output:
 
 ```text
-Topic: sensor-events  Partition: 0  Leader: 1  Replicas: 1,2,3  Isr: 1,3
-Topic: sensor-events  Partition: 1  Leader: 3  Replicas: 2,3,1  Isr: 3,1
-Topic: sensor-events  Partition: 2  Leader: 3  Replicas: 3,1,2  Isr: 3,1
+Topic: sensor-events	TopicId: R9-5BNrLTcOv5REGpwRatg	PartitionCount: 3	ReplicationFactor: 3	Configs: min.insync.replicas=2
+	Topic: sensor-events	Partition: 0	Leader: 3	Replicas: 2,3,1	Isr: 3,1
+	Topic: sensor-events	Partition: 1	Leader: 3	Replicas: 3,1,2	Isr: 3,1
+	Topic: sensor-events	Partition: 2	Leader: 1	Replicas: 1,2,3	Isr: 1,3
 ```
 
-Observation:
+Partition 0 moved leadership from broker 2 to broker 3. The ISR shrank to two brokers, which still satisfies `min.insync.replicas=2`.
 
-- Partitions that had broker 2 as leader are reassigned to broker 1 or broker 3.
-- The ISR list shrinks from three brokers to two brokers.
-- Because `min.insync.replicas=2`, producers using `acks=all` can still publish safely while one broker is down.
-- If a second broker fails, writes are rejected instead of being acknowledged with insufficient replication.
+## After Restarting `kafka2`
 
-After restarting `kafka2`, the ISR returns to three brokers:
+Commands:
+
+```bash
+docker start kafka2
+sleep 25
+docker exec kafka1 kafka-topics \
+  --bootstrap-server kafka1:29092 \
+  --describe --topic sensor-events
+```
+
+Output:
 
 ```text
-Topic: sensor-events  Partition: 0  Leader: 1  Replicas: 1,2,3  Isr: 1,3,2
-Topic: sensor-events  Partition: 1  Leader: 3  Replicas: 2,3,1  Isr: 3,1,2
-Topic: sensor-events  Partition: 2  Leader: 3  Replicas: 3,1,2  Isr: 3,1,2
+Topic: sensor-events	TopicId: R9-5BNrLTcOv5REGpwRatg	PartitionCount: 3	ReplicationFactor: 3	Configs: min.insync.replicas=2
+	Topic: sensor-events	Partition: 0	Leader: 3	Replicas: 2,3,1	Isr: 3,1,2
+	Topic: sensor-events	Partition: 1	Leader: 3	Replicas: 3,1,2	Isr: 3,1,2
+	Topic: sensor-events	Partition: 2	Leader: 1	Replicas: 1,2,3	Isr: 1,3,2
 ```
 
-## Conclusion
-
-The configuration demonstrates the expected Kafka fault tolerance pattern: replication factor 3 protects data from one broker failure, and `min.insync.replicas=2` prevents unsafe acknowledgements.
+Broker 2 rejoined the ISR for all partitions. This validates the replication factor 3 and `min.insync.replicas=2` design.
 

@@ -1,0 +1,3 @@
+>>> docker compose down -v
+ Network zhang-weixia-iot-platform_default  Removing
+ Network zhang-weixia-iot-platform_default  Removed

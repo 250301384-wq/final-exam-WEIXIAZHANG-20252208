@@ -1,0 +1,2 @@
+>>> docker start kafka2
+kafka2

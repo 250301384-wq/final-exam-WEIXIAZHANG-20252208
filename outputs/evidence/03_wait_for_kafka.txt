@@ -1,0 +1,1 @@
+Kafka is ready after 1 attempt(s).

@@ -1,0 +1,2 @@
+>>> spark-submit --packages org.apache.spark:spark-sql-kafka-0-10_2.12:3.5.3 src/spark_pipeline.py --duration-seconds 180 --trigger 10 seconds
+JAVA_HOME is not set

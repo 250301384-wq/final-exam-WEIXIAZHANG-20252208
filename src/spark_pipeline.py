@@ -71,7 +71,6 @@ def build_streams(spark: SparkSession, args: argparse.Namespace) -> tuple[DataFr
     kafka_df = (
         spark.readStream.format("kafka")
         .option("kafka.bootstrap.servers", args.bootstrap_servers)
-        .option("kafka.group.id", "spark-sensor-pipeline")
         .option("subscribe", args.topic)
         .option("startingOffsets", "earliest")
         .option("failOnDataLoss", "false")
@@ -97,7 +96,15 @@ def build_streams(spark: SparkSession, args: argparse.Namespace) -> tuple[DataFr
         col("partition"),
         col("offset"),
         col("ingestion_time"),
-    ).where(col("event").isNotNull())
+    ).where(
+        col("event").isNotNull()
+        & col("event.sensor").isNotNull()
+        & col("event.value").isNotNull()
+        & col("event.unit").isNotNull()
+        & col("event.timestamp").isNotNull()
+        & col("event.source").isNotNull()
+        & col("event.anomaly").isNotNull()
+    )
 
     events = parsed.select(
         col("event.sensor").alias("sensor_type"),
@@ -116,20 +123,23 @@ def build_streams(spark: SparkSession, args: argparse.Namespace) -> tuple[DataFr
     )
 
     valid = events.where(
-        (
-            (col("sensor_type") == "temperature")
-            & (col("unit") == "C")
-            & col("value").between(-40.0, 85.0)
-        )
-        | (
-            (col("sensor_type") == "humidity")
-            & (col("unit") == "%")
-            & col("value").between(0.0, 100.0)
-        )
-        | (
-            (col("sensor_type") == "pressure")
-            & (col("unit") == "hPa")
-            & col("value").between(870.0, 1100.0)
+        col("event_time").isNotNull()
+        & (
+            (
+                (col("sensor_type") == "temperature")
+                & (col("unit") == "C")
+                & col("value").between(-40.0, 85.0)
+            )
+            | (
+                (col("sensor_type") == "humidity")
+                & (col("unit") == "%")
+                & col("value").between(0.0, 100.0)
+            )
+            | (
+                (col("sensor_type") == "pressure")
+                & (col("unit") == "hPa")
+                & col("value").between(870.0, 1100.0)
+            )
         )
     ).withColumn(
         "is_anomaly",
@@ -186,6 +196,18 @@ def main() -> int:
     spark = create_spark()
     spark.sparkContext.setLogLevel("WARN")
 
+    sink_plan = {
+        "raw_path": str(root / "raw"),
+        "raw_checkpoint": str(checkpoints / "raw"),
+        "curated_path": str(root / "curated"),
+        "curated_checkpoint": str(checkpoints / "curated"),
+        "consumption_path": str(root / "consumption"),
+        "consumption_checkpoint": str(checkpoints / "consumption"),
+    }
+    print("Spark pipeline sink plan:")
+    for key, value in sink_plan.items():
+        print(f"  {key}: {value}")
+
     raw_sink, curated_sink, consumption_sink = build_streams(spark, args)
 
     queries = [
@@ -216,12 +238,19 @@ def main() -> int:
         if args.duration_seconds > 0:
             deadline = time.time() + args.duration_seconds
             while time.time() < deadline and all(query.isActive for query in queries):
+                for query in queries:
+                    if query.exception() is not None:
+                        raise RuntimeError(f"Streaming query failed: {query.name or query.id}") from query.exception()
                 time.sleep(1)
         else:
             spark.streams.awaitAnyTermination()
+        for query in queries:
+            if query.exception() is not None:
+                raise RuntimeError(f"Streaming query failed: {query.name or query.id}") from query.exception()
     finally:
         for query in queries:
-            query.stop()
+            if query.isActive:
+                query.stop()
         spark.stop()
 
     return 0
